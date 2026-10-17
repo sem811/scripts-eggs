@@ -1,0 +1,340 @@
+--========================================================--
+--  SEMYON SPEED | УКРАДИ ЯЙЦО (Steal an Egg) v2
+--  Executor: Xeno
+--  Меню: RightShift
+--  Функции: Скорость (слайдер 16-1000), Noclip, Сброс
+--========================================================--
+
+local Players          = game:GetService("Players")
+local RunService       = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+
+--// состояние
+local DEFAULT_SPEED = 16
+
+local state = {
+    speedOn = false,
+    speed   = 45,
+    noclip  = false,
+}
+
+--// удаляем старую копию GUI
+local guiParent = player:WaitForChild("PlayerGui")
+pcall(function()
+    if gethui then guiParent = gethui() end
+end)
+for _, g in ipairs(guiParent:GetChildren()) do
+    if g.Name == "SemyonEggSpeed" then g:Destroy() end
+end
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "SemyonEggSpeed"
+gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+gui.Parent = guiParent
+
+--// главное окно (фиксированные размеры!)
+local main = Instance.new("Frame")
+main.Name = "Main"
+main.Size = UDim2.new(0, 330, 0, 252)
+main.Position = UDim2.new(0.5, -165, 0.5, -126)
+main.BackgroundColor3 = Color3.fromRGB(18, 18, 24)
+main.BorderSizePixel = 0
+main.Active = true
+main.Parent = gui
+
+local mainCorner = Instance.new("UICorner")
+mainCorner.CornerRadius = UDim.new(0, 10)
+mainCorner.Parent = main
+
+--// шапка
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(0, 330, 0, 36)
+title.BackgroundTransparency = 1
+title.Text = "  SEMYON | УКРАДИ ЯЙЦО - SPEED"
+title.TextColor3 = Color3.fromRGB(241, 196, 15)
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Font = Enum.Font.GothamBold
+title.TextSize = 14
+title.Parent = main
+
+local closeBtn = Instance.new("TextButton")
+closeBtn.Size = UDim2.new(0, 28, 0, 28)
+closeBtn.Position = UDim2.new(1, -32, 0, 4)
+closeBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+closeBtn.Text = "X"
+closeBtn.TextColor3 = Color3.fromRGB(230, 230, 230)
+closeBtn.Font = Enum.Font.GothamBold
+closeBtn.TextSize = 13
+closeBtn.Parent = main
+
+local closeCorner = Instance.new("UICorner")
+closeCorner.CornerRadius = UDim.new(0, 6)
+closeCorner.Parent = closeBtn
+
+closeBtn.MouseButton1Click:Connect(function()
+    main.Visible = false
+end)
+
+--// подпись СКОРОСТЬ + значение
+local speedLabel = Instance.new("TextLabel")
+speedLabel.Size = UDim2.new(0, 180, 0, 18)
+speedLabel.Position = UDim2.new(0, 20, 0, 46)
+speedLabel.BackgroundTransparency = 1
+speedLabel.Text = "СКОРОСТЬ"
+speedLabel.TextColor3 = Color3.fromRGB(200, 200, 210)
+speedLabel.TextXAlignment = Enum.TextXAlignment.Left
+speedLabel.Font = Enum.Font.Gotham
+speedLabel.TextSize = 13
+speedLabel.Parent = main
+
+local speedValueLabel = Instance.new("TextLabel")
+speedValueLabel.Size = UDim2.new(0, 90, 0, 18)
+speedValueLabel.Position = UDim2.new(0, 220, 0, 46)
+speedValueLabel.BackgroundTransparency = 1
+speedValueLabel.Text = tostring(state.speed)
+speedValueLabel.TextColor3 = Color3.fromRGB(241, 196, 15)
+speedValueLabel.TextXAlignment = Enum.TextXAlignment.Right
+speedValueLabel.Font = Enum.Font.GothamBold
+speedValueLabel.TextSize = 13
+speedValueLabel.Parent = main
+
+--// слайдер скорости (до 1000)
+local track = Instance.new("Frame")
+track.Size = UDim2.new(0, 290, 0, 8)
+track.Position = UDim2.new(0, 20, 0, 78)
+track.BackgroundColor3 = Color3.fromRGB(45, 45, 55)
+track.BorderSizePixel = 0
+track.Parent = main
+
+local trackCorner = Instance.new("UICorner")
+trackCorner.CornerRadius = UDim.new(1, 0)
+trackCorner.Parent = track
+
+local fill = Instance.new("Frame")
+fill.Size = UDim2.new(0.03, 0, 1, 0)
+fill.BackgroundColor3 = Color3.fromRGB(241, 196, 15)
+fill.BorderSizePixel = 0
+fill.Parent = track
+
+local fillCorner = Instance.new("UICorner")
+fillCorner.CornerRadius = UDim.new(1, 0)
+fillCorner.Parent = fill
+
+local thumb = Instance.new("Frame")
+thumb.Size = UDim2.new(0, 16, 0, 16)
+thumb.Position = UDim2.new(0.03, -8, 0.5, -8)
+thumb.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+thumb.BorderSizePixel = 0
+thumb.Parent = track
+
+local thumbCorner = Instance.new("UICorner")
+thumbCorner.CornerRadius = UDim.new(1, 0)
+thumbCorner.Parent = thumb
+
+local SLIDER_MIN = 16
+local SLIDER_MAX = 1000   -- <<< теперь максимум 1000
+local sliding = false
+
+local function sliderToValue(x)
+    local alpha = math.clamp((x - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+    return math.floor(SLIDER_MIN + alpha * (SLIDER_MAX - SLIDER_MIN) + 0.5)
+end
+
+local function updateSliderVisual(v)
+    local alpha = (v - SLIDER_MIN) / (SLIDER_MAX - SLIDER_MIN)
+    fill.Size = UDim2.new(alpha, 0, 1, 0)
+    thumb.Position = UDim2.new(alpha, -8, 0.5, -8)
+    speedValueLabel.Text = tostring(v)
+end
+
+track.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
+        sliding = true
+        local v = sliderToValue(input.Position.X)
+        state.speed = v
+        updateSliderVisual(v)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if sliding and (input.UserInputType == Enum.UserInputType.MouseMovement
+    or input.UserInputType == Enum.UserInputType.Touch) then
+        local v = sliderToValue(input.Position.X)
+        state.speed = v
+        updateSliderVisual(v)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1
+    or input.UserInputType == Enum.UserInputType.Touch then
+        sliding = false
+    end
+end)
+
+--// кнопки-переключатели
+local function makeToggle(posY, labelText, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 290, 0, 32)
+    btn.Position = UDim2.new(0, 20, 0, posY)
+    btn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+    btn.TextColor3 = Color3.fromRGB(230, 230, 230)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 13
+    btn.Parent = main
+
+    local bCorner = Instance.new("UICorner")
+    bCorner.CornerRadius = UDim.new(0, 8)
+    bCorner.Parent = btn
+
+    local on = false
+    local function refresh()
+        if on then
+            btn.BackgroundColor3 = Color3.fromRGB(46, 204, 113)
+            btn.Text = labelText .. ": ВКЛ"
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(60, 60, 70)
+            btn.Text = labelText .. ": ВЫКЛ"
+        end
+    end
+
+    btn.MouseButton1Click:Connect(function()
+        on = not on
+        refresh()
+        callback(on)
+    end)
+
+    refresh()
+end
+
+makeToggle(104, "СКОРОСТЬ", function(on)
+    state.speedOn = on
+    local char = player.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum and not on then
+        hum.WalkSpeed = DEFAULT_SPEED
+    end
+end)
+
+makeToggle(146, "NOCLIP", function(on)
+    state.noclip = on
+    if not on then
+        local char = player.Character
+        if char then
+            for _, p in ipairs(char:GetDescendants()) do
+                if p:IsA("BasePart") and p.Name ~= "Handle" then
+                    p.CanCollide = false
+                    p.CanCollide = true
+                end
+            end
+        end
+    end
+end)
+
+--// сброс
+local resetBtn = Instance.new("TextButton")
+resetBtn.Size = UDim2.new(0, 290, 0, 30)
+resetBtn.Position = UDim2.new(0, 20, 0, 190)
+resetBtn.BackgroundColor3 = Color3.fromRGB(231, 76, 60)
+resetBtn.Text = "СБРОС СКОРОСТИ (16)"
+resetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+resetBtn.Font = Enum.Font.GothamBold
+resetBtn.TextSize = 13
+resetBtn.Parent = main
+
+local resetCorner = Instance.new("UICorner")
+resetCorner.CornerRadius = UDim.new(0, 8)
+resetCorner.Parent = resetBtn
+
+resetBtn.MouseButton1Click:Connect(function()
+    state.speed = DEFAULT_SPEED
+    updateSliderVisual(DEFAULT_SPEED)
+end)
+
+--// подсказка внизу
+local hint = Instance.new("TextLabel")
+hint.Size = UDim2.new(0, 330, 0, 16)
+hint.Position = UDim2.new(0, 0, 1, -22)
+hint.BackgroundTransparency = 1
+hint.Text = "RightShift - открыть/скрыть меню"
+hint.TextColor3 = Color3.fromRGB(120, 120, 130)
+hint.Font = Enum.Font.Gotham
+hint.TextSize = 11
+hint.Parent = main
+
+--// главный цикл: скорость + noclip
+RunService.Heartbeat:Connect(function()
+    local char = player.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+
+    if hum and state.speedOn and hum.WalkSpeed ~= state.speed then
+        hum.WalkSpeed = state.speed
+    end
+
+    if state.noclip then
+        for _, p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") and p.CanCollide then
+                p.CanCollide = false
+            end
+        end
+    end
+end)
+
+--// повторное применение после респавна
+player.CharacterAdded:Connect(function(char)
+    local hum = char:WaitForChild("Humanoid", 10)
+    if not hum then return end
+    task.wait(0.3)
+    if state.speedOn then
+        hum.WalkSpeed = state.speed
+    end
+end)
+
+--// перетаскивание окна за шапку
+local draggingWindow = false
+local dragStart, startPos
+
+title.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        draggingWindow = true
+        dragStart = input.Position
+        startPos = main.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                draggingWindow = false
+            end
+        end)
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if draggingWindow and input.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = input.Position - dragStart
+        main.Position = UDim2.new(
+            startPos.X.Scale, startPos.X.Offset + delta.X,
+            startPos.Y.Scale, startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+--// хоткей меню
+UserInputService.InputBegan:Connect(function(input, processed)
+    if processed then return end
+    if input.KeyCode == Enum.KeyCode.RightShift then
+        main.Visible = not main.Visible
+    end
+end)
+
+--// уведомление при запуске
+pcall(function()
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "SEMYON SPEED",
+        Text = "Слайдер теперь до 1000! RightShift - меню",
+        Duration = 4
+    })
+end)
